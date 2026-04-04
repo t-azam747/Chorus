@@ -1,0 +1,15 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json* turbo.json tsconfig.base.json ./
+COPY packages/ ./packages/
+COPY apps/mcp/ ./apps/mcp/
+RUN npm ci
+RUN npx turbo build --filter=@chorus/mcp
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/mcp/dist ./dist
+COPY --from=builder /app/apps/mcp/package.json ./
+EXPOSE 3002
+CMD ["node", "dist/server.js"]

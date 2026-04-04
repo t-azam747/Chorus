@@ -1,0 +1,1 @@
+{"dashboard":{"title":"Worker Throughput","panels":[{"title":"Queue Depth","type":"graph"},{"title":"Processing Time","type":"graph"},{"title":"Job Success Rate","type":"stat"}]}}

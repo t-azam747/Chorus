@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'chorus-api'
+    static_configs:
+      - targets: ['api:3001']
+  - job_name: 'chorus-mcp'
+    static_configs:
+      - targets: ['mcp:3002']

@@ -1,0 +1,1 @@
+{"dashboard":{"title":"API Performance","panels":[{"title":"Request Latency","type":"graph"},{"title":"Error Rate","type":"graph"},{"title":"Active Connections","type":"stat"}]}}

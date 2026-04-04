@@ -1,0 +1,10 @@
+groups:
+  - name: rag-degradation
+    rules:
+      - alert: RAGRetrievalQualityDrop
+        expr: avg(chorus_rag_retrieval_score) < 0.7
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG retrieval quality has dropped >15%"

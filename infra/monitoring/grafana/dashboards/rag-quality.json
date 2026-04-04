@@ -1,0 +1,1 @@
+{"dashboard":{"title":"RAG Quality","panels":[{"title":"Retrieval Scores","type":"graph"},{"title":"LLM Response Validity","type":"graph"},{"title":"Average Confidence","type":"stat"}]}}

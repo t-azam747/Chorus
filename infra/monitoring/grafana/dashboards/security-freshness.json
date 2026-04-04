@@ -1,0 +1,1 @@
+{"dashboard":{"title":"Security Freshness","panels":[{"title":"Report Age","type":"graph"},{"title":"Scan Coverage","type":"stat"},{"title":"Vulnerability Trend","type":"graph"}]}}

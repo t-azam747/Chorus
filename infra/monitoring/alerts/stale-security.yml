@@ -1,0 +1,10 @@
+groups:
+  - name: stale-security
+    rules:
+      - alert: StaleSecurityReport
+        expr: (time() - chorus_security_report_age_seconds) > 604800
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Security report is older than 7 days"
