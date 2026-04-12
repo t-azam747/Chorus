@@ -1,15 +1,41 @@
+# ── Stage 1: Builder ─────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json* turbo.json tsconfig.base.json ./
-COPY packages/ ./packages/
-COPY apps/api/ ./apps/api/
-RUN npm ci
-RUN npx turbo build --filter=@chorus/api
 
+# Install build tools needed for native modules (tree-sitter, etc.)
+RUN apk add --no-cache python3 make g++
+
+# Copy monorepo root config files
+COPY package.json package-lock.json* turbo.json tsconfig.base.json ./
+
+# Copy shared packages first (they're dependencies of the apps)
+COPY packages/ ./packages/
+
+# Copy the API app
+COPY apps/api/ ./apps/api/
+
+# Install all workspace dependencies
+RUN npm ci
+
+# Build shared packages first, then the API
+# Uses tsconfig.prod.json which emits JS to dist/
+RUN npm run build --workspace=packages/shared-types 2>/dev/null || true
+RUN npm run build --workspace=packages/graph-utils 2>/dev/null || true
+RUN npm run build --workspace=packages/tree-sitter-utils 2>/dev/null || true
+RUN npm run build --workspace=apps/api
+
+# ── Stage 2: Runtime ─────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+
+# Only copy what's needed to run
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/package.json ./
+
+# Expose API port
 EXPOSE 3001
+
+# Default: run the API server
+# For the migration service, override with: node dist/db/migrate.js
 CMD ["node", "dist/server.js"]

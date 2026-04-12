@@ -1,15 +1,24 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:7
+  # ── PostgreSQL + pgvector ────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg17
     ports:
-      - '27017:27017'
-    volumes:
-      - mongo-data:/data/db
+      - '5432:5432'
     environment:
-      MONGO_INITDB_DATABASE: chorus
+      POSTGRES_USER: chorus
+      POSTGRES_PASSWORD: chorus
+      POSTGRES_DB: chorus
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U chorus']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # ── Redis ────────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports:
@@ -17,47 +26,84 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # ── DB Migration (one-shot, exits after running) ─
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    command: node dist/db/migrate.js
+    environment:
+      DATABASE_URL: postgresql://chorus:chorus@postgres:5432/chorus
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  # ── API ──────────────────────────────────────────
   api:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
     ports:
       - '3001:3001'
-    env_file: ../../.env
+    env_file: ../../apps/api/.env
+    environment:
+      DATABASE_URL: postgresql://chorus:chorus@postgres:5432/chorus
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
     depends_on:
-      - mongo
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
+  # ── Worker ───────────────────────────────────────
   worker:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.worker
-    env_file: ../../.env
+    env_file: ../../apps/api/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
     depends_on:
-      - mongo
-      - redis
+      redis:
+        condition: service_healthy
 
+  # ── MCP ──────────────────────────────────────────
   mcp:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.mcp
     ports:
       - '3002:3002'
-    env_file: ../../.env
+    env_file: ../../apps/api/.env
+    environment:
+      NODE_ENV: production
     depends_on:
       - api
 
+  # ── Web ──────────────────────────────────────────
   web:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.web
     ports:
       - '3000:3000'
-    env_file: ../../.env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NODE_ENV: production
     depends_on:
       - api
 
 volumes:
-  mongo-data:
+  postgres-data:
   redis-data:
