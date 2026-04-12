@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ArchVisualization from "@/components/visualization/ArchVisualization";
-import { sampleGraph } from "@/data/sampleGraph";
+// Removed sampleGraph import
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,6 +57,8 @@ export default function AnalyzePage() {
     const [analyzed, setAnalyzed] = useState(false);
     const [loading, setLoading] = useState(false);
     const [analysisData, setAnalysisData] = useState<any>(null);
+    const [archData, setArchData] = useState<any>(null);
+    const [loadingArch, setLoadingArch] = useState(false);
     const [hydrated, setHydrated] = useState(false);
 
     // Restore persisted state on first mount
@@ -64,10 +66,11 @@ export default function AnalyzePage() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                const { url: savedUrl, analysisData: savedData, analyzed: savedAnalyzed } = JSON.parse(saved);
+                const { url: savedUrl, analysisData: savedData, analyzed: savedAnalyzed, archData: savedArch } = JSON.parse(saved);
                 if (savedUrl) setUrl(savedUrl);
                 if (savedData) setAnalysisData(savedData);
                 if (savedAnalyzed) setAnalyzed(savedAnalyzed);
+                if (savedArch) setArchData(savedArch);
             }
         } catch (e) {
             // ignore parse errors
@@ -79,7 +82,7 @@ export default function AnalyzePage() {
     useEffect(() => {
         if (!hydrated) return;
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ url, analysisData, analyzed }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ url, analysisData, analyzed, archData }));
         } catch (e) {
             // ignore storage errors
         }
@@ -97,6 +100,10 @@ export default function AnalyzePage() {
             const data = await res.json();
             setAnalysisData(data);
             setAnalyzed(true);
+            
+            // Fire off the architecture pipeline asynchronously
+            fetchArchitectureGraph(data.repo.owner, data.repo.name);
+            
         } catch (error) {
             console.error("Failed to analyze repo:", error);
         } finally {
@@ -104,10 +111,28 @@ export default function AnalyzePage() {
         }
     };
 
+    const fetchArchitectureGraph = async (owner: string, repoName: string) => {
+        setLoadingArch(true);
+        setArchData(null);
+        try {
+            const encodeId = encodeURIComponent(`${owner}/${repoName}`);
+            const res = await fetch(`http://localhost:3001/api/repo/${encodeId}/graph?level=architecture`);
+            if (res.ok) {
+                const arch = await res.json();
+                setArchData(arch);
+            }
+        } catch (error) {
+            console.error("Failed to fetch architecture:", error);
+        } finally {
+            setLoadingArch(false);
+        }
+    };
+
     const handleClear = () => {
         setUrl("https://github.com/vercel/next.js");
         setAnalyzed(false);
         setAnalysisData(null);
+        setArchData(null);
         try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
     };
 
@@ -142,7 +167,7 @@ export default function AnalyzePage() {
                             <input
                                 type="text"
                                 value={url}
-                                onChange={(e) => { setUrl(e.target.value); setAnalyzed(false); setAnalysisData(null); }}
+                                onChange={(e) => { setUrl(e.target.value); setAnalyzed(false); setAnalysisData(null); setArchData(null); }}
                                 placeholder="https://github.com/owner/repo"
                                 className="w-full bg-[#121212] border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500/40"
                             />
@@ -374,7 +399,23 @@ export default function AnalyzePage() {
                                     </Badge>
                                     <p className="text-slate-500 text-sm ml-2">Job ID: {analysisData.jobId} (Processing in Background)</p>
                                 </div>
-                                <ArchVisualization graph={sampleGraph} />
+                                {loadingArch ? (
+                                    <Card className="bg-[#121212] border-white/5 h-[600px] flex flex-col items-center justify-center animate-pulse">
+                                        <div className="w-12 h-12 border-4 border-white/10 border-t-orange-500 rounded-full animate-spin mb-6" />
+                                        <h3 className="text-xl font-bold text-white mb-2">Processing Architecture...</h3>
+                                        <p className="text-slate-500 max-w-md text-center text-sm">
+                                            Semantic AI agents are exploring the repository tree and constructing a progressive disclosure graph. This may take up to 20 seconds.
+                                        </p>
+                                    </Card>
+                                ) : archData ? (
+                                    <ArchVisualization graph={archData} />
+                                ) : (
+                                    <Card className="bg-[#121212] border-white/5 h-[300px] flex items-center justify-center">
+                                        <p className="text-slate-500 flex items-center gap-2">
+                                            <Shield className="w-4 h-4" /> Architecture unmapped. Could not generate topology.
+                                        </p>
+                                    </Card>
+                                )}
                             </div>
 
                             <div className="flex justify-center mt-4">

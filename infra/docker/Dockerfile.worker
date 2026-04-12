@@ -1,15 +1,29 @@
+# ── Stage 1: Builder ─────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+RUN apk add --no-cache python3 make g++
+
 COPY package.json package-lock.json* turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/worker/ ./apps/worker/
-RUN npm ci
-RUN npx turbo build --filter=@chorus/worker
 
+RUN npm ci
+
+RUN npm run build --workspace=packages/shared-types 2>/dev/null || true
+RUN npm run build --workspace=packages/graph-utils 2>/dev/null || true
+RUN npm run build --workspace=packages/tree-sitter-utils 2>/dev/null || true
+RUN npm run build --workspace=apps/worker
+
+# ── Stage 2: Runtime ─────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+
+# git is needed for isomorphic-git (repo cloning)
 RUN apk add --no-cache git
+
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/apps/worker/package.json ./
+
 CMD ["node", "dist/worker.js"]

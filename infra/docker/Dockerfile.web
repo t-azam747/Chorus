@@ -1,16 +1,28 @@
+# ── Stage 1: Builder ─────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
+
 COPY package.json package-lock.json* turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
-RUN npm ci
-RUN npx turbo build --filter=@chorus/web
 
+RUN npm ci
+
+# Build the Next.js app (outputs to .next/)
+RUN npm run build --workspace=apps/web
+
+# ── Stage 2: Runtime ─────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy the Next.js build output
 COPY --from=builder /app/apps/web/.next ./.next
 COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder /app/apps/web/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
+
 EXPOSE 3000
-CMD ["npx", "next", "start"]
+
+CMD ["npx", "next", "start", "-p", "3000"]
